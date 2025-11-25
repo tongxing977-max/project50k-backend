@@ -21,7 +21,7 @@ class State(TypedDict):
 
 def get_lifespan():
     @asynccontextmanager
-    async def lifespan(_app: FastAPI) -> AsyncGenerator[State]:
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[State, None]:
         try:
             logger.info("app start running")
             async with httpx.AsyncClient() as http_client:
@@ -67,7 +67,7 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def flatten_query_string_lists(request: Request, call_next):
         flattened: list[tuple[str, str]] = []
-        for key, value in request.query_params.multi_items():
+        for key, value in request.query_params.items():
             flattened.extend((key, entry) for entry in value.split(","))
 
         request.scope["query_string"] = urlencode(flattened, doseq=True).encode("utf-8")

@@ -1,18 +1,52 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+# -----------------------------
+# 1. 安全相关 (绝对不传)
+# -----------------------------
+.env
+.env.prod
+.env.dev
+.env.test
+.env.local
 
-# Virtual environments
-.venv
-rabbitmq
-.idea
-celerybeat-schedule.db
-redis
-postgres
-logs/
-.mypy_cache/
-.ruff_cache/
+# -----------------------------
+# 2. Python 编译垃圾 (自动生成的)
+# -----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# -----------------------------
+# 3. 虚拟环境 (本地依赖)
+# -----------------------------
+.venv/
+venv/
+env/
+.env/
+
+# -----------------------------
+# 4. IDE 配置 (你个人的编辑器设置)
+# -----------------------------
+.vscode/
+.idea/
+*.swp
+
+# -----------------------------
+# 5. 项目运行时生成的文件
+# -----------------------------
+# 忽略 logs 文件夹下的所有内容
+logs/*
+# 但是！保留 logs 文件夹本身 (这是一个常用技巧)
+!logs/.gitkeep
+
+# 覆盖率测试报告
+.coverage
+htmlcov/
+
+# Celery 临时文件
+celerybeat-schedule
+celerybeat.pid
+
+# -----------------------------
+# 6. 系统垃圾
+# -----------------------------
+.DS_Store
+Thumbs.db

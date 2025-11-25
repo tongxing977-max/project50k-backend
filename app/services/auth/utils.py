@@ -12,7 +12,7 @@ from app.services.database.models.user import User
 from app.services.database.models.user.crud import get_user_by_id
 from app.services.deps import get_session, get_settings_service
 
-ALGORITHM = "HS256"
+ALGORITHM = "HS256"  # 使用HS256得算法来进行加密 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_login = OAuth2PasswordBearer(tokenUrl="api/v1/login", auto_error=False)
 
@@ -23,16 +23,16 @@ def get_hash_password(password: str) -> str:
 
 
 @sync_to_async
-def password_verify(plain_password: str, hashed_password: str) -> bool:
+def password_verify(plain_password: str, hashed_password: str) -> bool:  # 验证密码是否
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: timedelta):
     settings_service = get_settings_service()
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + expires_delta
+    expire = datetime.now(timezone.utc) + expires_delta #
     to_encode["exp"] = expire
-    return jwt.encode(to_encode, settings_service.settings.jwt_secret, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, settings_service.settings.jwt_secret, algorithm=ALGORITHM) #使用iwt得加密方式加密 
 
 
 @sync_to_async
@@ -51,7 +51,7 @@ async def get_current_user(
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> User:
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Not authenticated") 
     user_id = await jwt_decode(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")

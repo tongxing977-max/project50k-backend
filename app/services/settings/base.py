@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     environment: Annotated[str, Field(strict=True, alias="ENVIRONMENT")]
     database_url: Annotated[str, Field(strict=True, alias="DATABASE_URL")]
     jwt_secret: Annotated[str, Field(strict=True, alias="JWT_SECRET")]
+    access_expire_min: Annotated[int, Field(strict=False, alias="ACCESS_EXPIRE_MIN")]
+    refresh_expire_days: Annotated[int, Field(strict=False, alias="REFRESH_EXPIRE_DAYS")]
     db_connection_settings: dict = {
         "pool_size": 20,  # Match the pool_size above
         "max_overflow": 30,  # Match the max_overflow above
