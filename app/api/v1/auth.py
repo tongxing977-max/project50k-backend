@@ -18,8 +18,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class AuthPayload(BaseModel):  # 登录/注册请求体模型
-    username: str = Field(min_length=3, max_length=64)  # 用户名最短 3 最长 64
-    password: str = Field(min_length=6, max_length=128)  # 密码最短 6 最长 128
+    username: str 
+    password: str
 
 
 class TokenPair(BaseModel):  # 返回的令牌对模型
@@ -65,7 +65,6 @@ async def register(payload: AuthPayload, db: AsyncSession = Depends(get_session)
 
     # 签发访问/刷新令牌
     auth = get_auth_service()  # 获取 AuthService 实例
-    print(f"{auth=}")
     tokens = await auth.issue_tokens(user.id)  # 生成令牌对
 
     # 组装响应
@@ -78,12 +77,12 @@ async def login(payload: AuthPayload, db: AsyncSession = Depends(get_session)):
     from sqlmodel import select  # 延迟导入 select
     user = (await db.execute(select(User).where(User.username == payload.username))).scalar()  # 查找用户
     if not user:  # 用户不存在
-        raise HTTPException(status_code=401, detail="Invalid credentials")  # 401 凭证无效
+        raise HTTPException(status_code=401, detail="Invalid credentials And User not found")  # 401 凭证无效
 
     # 校验密码
     ok = await password_verify(payload.password, user.password)  # 比对密码哈希
     if not ok:  # 密码错误
-        raise HTTPException(status_code=401, detail="Invalid credentials")  
+        raise HTTPException(status_code=401, detail="Invalid credentials And Password not match")  
 
     # 签发令牌
     auth = get_auth_service()  # 获取 AuthService
