@@ -20,6 +20,8 @@ dependencies = [
     "pydantic-settings>=2.9.1",
     "pyjwt>=2.10.1",
     "sqlmodel>=0.0.24",
+    "python-dateutil>=2.9.0.post0",
+    "asyncmy>=0.2.10",
 ]
 
 [dependency-groups]
