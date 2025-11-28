@@ -168,7 +168,7 @@ class DashboardOverview(BaseModel):
     daily_budget_limit: float     # 每日预算限额（可调整）
 
 
-# ============== 用户ID（临时，后续从JWT获取） ==============
+# ============== 用户ID（临时，后续从JWT获取）  目前就我一个用户 也无所谓==============
 
 def get_current_user_id() -> int:
     return 1  # TODO: 从 JWT token 获取
@@ -196,7 +196,7 @@ def get_current_month_str() -> str:
 
 # ============== Transaction API ==============
 
-@router.post("/transactions", response_model=TransactionOut)
+@router.post("/transactions", response_model=TransactionOut)  # 交易 
 async def create_transaction(
     payload: TransactionCreate,
     db: AsyncSession = Depends(get_session),
@@ -782,3 +782,192 @@ async def initialize_data(
     await db.commit()
     
     return {"message": "初始化成功", "user_id": user_id}
+
+
+# ============== AI Agent API ==============
+
+class ClassifyRequest(BaseModel):
+    """分类请求"""
+    description: str
+    amount: float = 0
+    type: str = "expense"  # "expense" | "income"  收入和支出 
+
+
+class LatteStats(BaseModel):
+    """拿铁因子统计"""
+    week_count: int = 0       # 本周第几杯
+    week_amount: float = 0    # 本周已花金额
+    month_count: int = 0      # 本月第几杯
+    month_amount: float = 0   # 本月已花金额
+
+
+class ClassifyResponse(BaseModel):
+    """分类响应"""
+    category: str
+    amount: float
+    is_latte: bool = False  # 拿铁因子：非必要消费
+    comment: str = ""
+    confidence: float = 0.9
+    latte_stats: LatteStats | None = None  # 拿铁因子统计（仅当 is_latte=True 时返回）
+
+
+@router.post("/classify", response_model=ClassifyResponse)
+async def classify_transaction(
+    payload: ClassifyRequest,
+    db: AsyncSession = Depends(get_session),
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    AI 智能分类
+    根据消费描述自动推测分类
+    如果是拿铁因子，还会返回本周/本月统计
+    """
+    from app.services.ai.agent import get_agent
+    
+    agent = get_agent()
+    result = await agent.classify(
+        description=payload.description,
+        amount=payload.amount,
+        tx_type=payload.type
+    )
+    
+    if result is None:
+        # AI 失败时返回默认值
+        return ClassifyResponse(
+            category="other",
+            amount=payload.amount,
+            is_latte=False,
+            comment="AI 暂时无法分析",
+            confidence=0
+        )
+    
+    # 如果是拿铁因子，查询统计数据
+    latte_stats = None
+    if result.is_latte:
+        today = DateType.today()
+        week_start = today - timedelta(days=today.weekday())  # 本周一
+        month_start = today.replace(day=1)  # 本月1号
+        
+        # 查询本周拿铁因子消费（咖啡 + 奶茶类小额消费）
+        # 这里用 coffee 分类 + 金额 < 50 的 food 作为近似
+        week_query = select(
+            func.count(Transaction.id),
+            func.coalesce(func.sum(Transaction.amount), 0)
+        ).where(
+            Transaction.user_id == user_id,
+            Transaction.date >= week_start,
+            Transaction.type == "expense",
+            # 咖啡分类，或者小额食品（奶茶等）
+            ((Transaction.category == "coffee") | 
+             ((Transaction.category == "food") & (Transaction.amount < 50)))
+        )
+        
+        week_result = await db.execute(week_query)
+        week_count, week_amount = week_result.one()
+        
+        # 查询本月统计
+        month_query = select(
+            func.count(Transaction.id),
+            func.coalesce(func.sum(Transaction.amount), 0)
+        ).where(
+            Transaction.user_id == user_id,
+            Transaction.date >= month_start,
+            Transaction.type == "expense",
+            ((Transaction.category == "coffee") | 
+             ((Transaction.category == "food") & (Transaction.amount < 50)))
+        )
+        
+        month_result = await db.execute(month_query)
+        month_count, month_amount = month_result.one()
+        
+        latte_stats = LatteStats(
+            week_count=week_count + 1,  # +1 是算上当前这笔
+            week_amount=float(week_amount) + payload.amount,
+            month_count=month_count + 1,
+            month_amount=float(month_amount) + payload.amount
+        )
+        
+        # 把统计信息追加到 AI 点评后面
+        stats_msg = f"（本周第{latte_stats.week_count}杯，已花¥{latte_stats.week_amount:.0f}）"
+        result.comment = f"{result.comment} {stats_msg}"
+    
+    return ClassifyResponse(
+        category=result.category,
+        amount=result.amount,
+        is_latte=result.is_latte,
+        comment=result.comment,
+        confidence=result.confidence,
+        latte_stats=latte_stats
+    )
+
+
+class InsightRequest(BaseModel):
+    """消费洞察请求"""
+    period: str = "本月"  # 分析周期描述
+
+
+class InsightResponse(BaseModel):
+    """消费洞察响应"""
+    summary: str
+    warnings: list[str] = []
+    suggestions: list[str] = []
+
+
+@router.post("/insight")
+async def get_spending_insight(
+    payload: InsightRequest,
+    db: AsyncSession = Depends(get_session),
+    user_id: int = Depends(get_current_user_id)
+):
+    """
+    AI 消费洞察
+    分析消费数据，给出智能建议
+    """
+    from app.services.ai.agent import get_agent
+    
+    # 获取本月交易数据
+    today = DateType.today()
+    month_start = today.replace(day=1)
+    
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.user_id == user_id,
+            Transaction.date >= month_start
+        )
+    )
+    transactions = result.scalars().all()
+    
+    # 转换为字典列表
+    tx_list = [
+        {
+            "name": t.name,
+            "amount": t.amount,
+            "type": t.type,
+            "category": t.category,
+            "date": str(t.date)
+        }
+        for t in transactions
+    ]
+    
+    if not tx_list:
+        return InsightResponse(
+            summary="本月暂无消费记录",
+            warnings=[],
+            suggestions=["开始记录第一笔消费吧！"]
+        )
+    
+    agent = get_agent()
+    insight = await agent.analyze_spending(tx_list, payload.period)
+    
+    if insight is None:
+        return InsightResponse(
+            summary="AI 分析暂时不可用",
+            warnings=[],
+            suggestions=[]
+        )
+    
+    return InsightResponse(
+        summary=insight.summary,
+        warnings=insight.warnings,
+        suggestions=insight.suggestions
+    )
