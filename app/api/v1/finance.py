@@ -971,3 +971,5 @@ async def get_spending_insight(
         warnings=insight.warnings,
         suggestions=insight.suggestions
     )
+
+
